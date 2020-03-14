@@ -1,4 +1,4 @@
-# Intro-to-Stochastic-Porcesses
+# Intro-to-Stochastic-Processes
 
 Code repo for self learning with `Introduction to Stochastic Processes with R - Robert P. Dobrow`
 

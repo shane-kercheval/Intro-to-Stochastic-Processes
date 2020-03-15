@@ -1,0 +1,348 @@
+---
+title: "Wooldridge 7e - Appendix B - Math Refresher - Basic Tools"
+author: "Shane Kercheval"
+output:
+  md_document:
+    variant: markdown_github
+    toc: true
+    toc_depth: 4
+---
+
+```{r setup, echo=FALSE, warning = FALSE, message = FALSE}
+#devtools::install_github('shane-kercheval/rtools')
+library(ggplot2)
+library(purrr)
+library(rtools)
+library(scales)
+library(dplyr)
+options(scipen=999) # non-scientific notation
+theme_set(theme_light())
+```
+
+# Appendix B - Probability Review
+
+## Example B.2
+
+```{r}
+circumference <- function(r) {
+    return (pi * r ^ 2)
+}
+radius <- c(1, 2, 4, 8)
+probabilities <- c(0.1, 0.2, 0.3, 0.4)
+(expected_value <- sum(circumference(radius) * probabilities))
+expected_value / pi
+```
+
+```{r}
+cal_expected_value <- function(.func, .values, .probabilities) {
+    return ( sum(.func(.values) * .probabilities) )
+}
+
+all.equal(expected_value, cal_expected_value(circumference, radius, probabilities))
+```
+
+
+```{r}
+(values <- circumference(radius))
+var(values)
+sd(values)
+(variance <- sum((radius - expected_value)^2 * probabilities))
+sqrt(variance)
+```
+
+hmmm.. pg 424 says this should be equivalent to above but i'm not getting the same answer 
+
+```{r}
+cal_expected_value(circumference, radius^2, probabilities) - expected_value^2
+```
+
+## Example B.5
+
+```{r}
+rt_plot_binom <- function(.num_observations, .probability) {
+    data.frame(x = 0:.num_observations,
+                  y = dbinom(0:.num_observations, .num_observations, prob = .probability)) %>%
+        ggplot(aes(x=x, y=y)) +
+        geom_col()
+}
+rt_plot_binom(100, 0.8) + geom_vline(aes(xintercept = 75), color='red')
+
+sum(dbinom(0:100, 100, 0.8))
+# sum each probability from 75 to 100
+sum(dbinom(75:100, 100, 0.8))
+# or, take the sum of probabilities from 1 to 74 and subtract it from 1
+1 - sum(dbinom(1:74, 100, 0.8))
+1 - pbinom(74, 100, 0.8)
+```
+
+```{r}
+rt_plot_geom <- function(.num_observations, .probability) {
+    data.frame(x = .num_observations,
+               y = dgeom(.num_observations - 1, prob = .probability)) %>%
+        ggplot(aes(x=x, y=y)) +
+    geom_col() +
+    scale_x_continuous(breaks = pretty_breaks(max(.num_observations) + 1)) +
+    scale_y_continuous(labels=percent_format())
+}
+rt_plot_geom(1:10, 0.5) 
+# 52 cards, 4 aces
+# how many hands until first ace
+rt_plot_geom(0:51, 4/52)
+1/(4/52)
+```
+
+# Example B.6
+
+Interested to see if I can simulate this and get ~same number from book.
+
+```{r}
+first_card_ace <- rbinom(1, 1, 4/52)
+second_card_ace <- rbinom(1, 1, 4/51)
+any(rbinom(1, 1, 4/52), rbinom(1, 1, 4/51))
+
+num_deals <- 100
+num_simulations <- 10000
+simulations <- map(1:num_simulations,
+                   ~ map_lgl(1:num_deals,
+                             ~ any(rbinom(1, 1, 4/52), rbinom(1, 1, 4/51))))
+
+mean(map_dbl(simulations, ~ which(. == 1)[1]))
+```
+
+```{r}
+rt_plot_poisson <- function(.num_observations, .rate) {
+    data.frame(x = .num_observations,
+               y = dpois(.num_observations, .rate)) %>%
+        ggplot(aes(x=x, y=y)) +
+    geom_col() +
+    scale_x_continuous(breaks = pretty_breaks(max(.num_observations) + 1)) +
+    scale_y_continuous(labels=percent_format())
+}
+rt_plot_poisson(0:30, 21.7) 
+dpois(14, 21.7)
+ppois(14, 21.7)
+```
+
+## Example B.9
+
+```{r}
+blood_type_probabilities <- c(0.44, 0.42, 0.10, 0.04)
+names(blood_type_probabilities) <- c("O", "A", "B", "AB")
+blood_type_probabilities
+
+snumber_of_people <- 6
+# random selection of people
+rmultinom(10, size = number_of_people, prob = blood_type_probabilities)
+# probability (density) that, in a sample of 6 people, 
+# 3 are O, 2 are A, 1 is B, and 0 are AB
+dmultinom(c(3, 2, 1, 0), prob = blood_type_probabilities)
+```
+
+## Example B.10
+
+```{r}
+# probability component will lat more than 1300 hours
+1 - pexp(1300, 1/1200)
+
+1 - pexp(1, 1/2)
+1 - pexp(2, 1/4)
+
+# if the average tv last 5 years
+# what is the probability it will last at least a year
+1 - pexp(1, 1/5)
+# so extended warranty is for the pexp(1, 1/5) chance it will not last more than a year
+pexp(1, 1/5)
+```
+
+
+# Chapter 1
+
+```{r}
+rt_plot_binom <- function(.num_observations, .probability) {
+    as.data.frame(x = 0:.num_observations,
+                  y = dbinom(x, .num_observations, prob = .probability)) %>%
+        ggplot(aes(x=x, y=y)) +
+        geom_col()
+}
+
+reed_frost_probability_time_t <- function(.z, .I_t) {
+    return (1 - (1 - .z)^.I_t)
+}
+
+reed_frost_probability_time_t(0.004, 3)
+
+simulate_infected_t_next <- function(.susceptible_t,
+                                     .infected_t,
+                                     .infection_probability) {
+    # simulate each person in the susceptible group either getting (1) or
+    # not getting (0) the disease based on Reed-Frost probability
+    return (rbinom(n=.susceptible_t,
+                   size=1,
+                   prob=reed_frost_probability_time_t(.infection_probability,
+                                                      .infected_t)))
+}
+simulate_infected_t_next(400, 3, 0.004)
+
+simulate_t_units <- function(.time_units=20,
+                             .susceptible_t=400,
+                             .infected_t=3,
+                             .infection_probability=0.004) {
+
+    for(.time in 1:.time_units) {
+        newly_infected <- simulate_infected_t_next(.susceptible_t[.time],
+                                                   .infected_t[.time],
+                                                   .infection_probability)
+
+        .infected_t <- c(.infected_t, sum(newly_infected))
+        .susceptible_t <- c(.susceptible_t, .susceptible_t[.time] - .infected_t[.time + 1])
+    }
+    
+    return (list(infected=.infected_t,
+                 susceptible=.susceptible_t))
+}
+
+simulate_mc_t_units <- function(.time_units=20,
+                             .susceptible_t=400,
+                             .infected_t=3,
+                             .infection_probability=0.004,
+                             .num_simulations_per_time=1000) {
+
+    confidence_intervals <- data.frame(t=0,
+                                       x=.infected_t,
+                                       conf_low = NA,
+                                       conf_high = NA)
+    
+    for(.time in 1:.time_units) {
+        newly_infected_simualtions <- map_dbl(1:.num_simulations_per_time,
+                                              ~ sum(simulate_infected_t_next(.susceptible_t[.time],
+                                                                             .infected_t[.time],
+                                                                             .infection_probability)))
+
+        sim_conf_intervals <- quantile(newly_infected_simualtions, c(0.025, 0.5, 0.975))
+        confidence_intervals <- confidence_intervals %>%
+            bind_rows(data.frame(t=.time,
+                                 x=sim_conf_intervals[2],
+                                 conf_low = sim_conf_intervals[1],
+                                 conf_high = sim_conf_intervals[3]))
+        #hist(newly_infected_simualtions)
+        .infected_t <- c(.infected_t, sim_conf_intervals[2])
+        .susceptible_t <- c(.susceptible_t, .susceptible_t[.time] - .infected_t[.time + 1])
+    }
+    
+    return (confidence_intervals)
+}
+
+```
+
+```{r}
+simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
+simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
+```
+
+
+```{r}
+num_time_units <- 100
+many_sims <- map(1:1000, ~ simulate_t_units(num_time_units, 400, 3, 0.004)$infected)
+
+many_sims[[6]]
+sims_matrix <- matrix(unlist(many_sims), ncol = num_time_units + 1)
+dim(sims_matrix)
+View(sims_matrix)
+sims_df <- as.data.frame(sims_matrix)
+apply(sims_matrix, 2, median)
+quantile_low <- function(x) {
+    quantile(x, 0.025)
+}
+quantile_high <- function(x) {
+    quantile(x, 0.975)
+}
+data.frame(t=0:num_time_units,
+           x=apply(sims_matrix, 2, median),
+           conf_low=apply(sims_matrix, 2, quantile_low),
+           conf_high=apply(sims_matrix, 2, quantile_high)) %>%
+    ggplot(aes(x=t, y=x)) +
+    geom_point() +
+    geom_errorbar(aes(ymin=conf_low, ymax=conf_high))
+
+
+library(stringr)
+library(tidyr)
+sims_df %>%
+    pivot_longer(-sim, names_to = 'time_index', values_to = 'infected') %>%
+    mutate(time_index = as.numeric(str_remove(time_index, 'V'))) %>%
+    ggplot(aes(x = time_index, y = infected, group=sim)) +
+    geom_line(alpha=0.2)
+simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
+simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
+```
+
+```{r}
+mc_sims <- simulate_mc_t_units()
+
+mc_sims %>%
+    ggplot(aes(x=t, y=x)) +
+    geom_point() +
+    geom_errorbar(aes(ymin=conf_low, ymax=conf_high))
+```
+
+
+```{r}
+newly_infected_simualtions
+```
+
+
+
+```{r}
+# MLE for Binomial Distribution 
+y<-c(0,0,0,1,1,1,1,1,1,1)
+y <- newly_infected_simualtions
+hist(y)
+#n <- 1 # length(y) here's the change!
+n <- .susceptible_t[.time]
+# formulation for the log likelihood for the binomial 
+logL <- function(p) sum(log(dbinom(y, n, p)))
+# again we can test the function for one value of p
+logL(0.7)
+#plot logL
+p.seq <- seq(0, 0.99, 0.01)
+plot(p.seq, sapply(p.seq, logL), type="l")
+#optimum:
+optimize_results <- optimize(logL, lower=0, upper=1, maximum=TRUE) 
+
+rt_plot_binom(400, optimize_results$maximum) + coord_cartesian(xlim = c(0, 10))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

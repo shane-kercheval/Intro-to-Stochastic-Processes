@@ -12,9 +12,11 @@ output:
 #devtools::install_github('shane-kercheval/rtools')
 library(ggplot2)
 library(purrr)
-library(rtools)
 library(scales)
+library(stringr)
 library(dplyr)
+library(tidyr)
+library(rtools)
 options(scipen=999) # non-scientific notation
 theme_set(theme_light())
 ```
@@ -200,123 +202,63 @@ simulate_t_units <- function(.time_units=20,
     return (list(infected=.infected_t,
                  susceptible=.susceptible_t))
 }
-
-simulate_mc_t_units <- function(.time_units=20,
-                             .susceptible_t=400,
-                             .infected_t=3,
-                             .infection_probability=0.004,
-                             .num_simulations_per_time=1000) {
-
-    confidence_intervals <- data.frame(t=0,
-                                       x=.infected_t,
-                                       conf_low = NA,
-                                       conf_high = NA)
-    
-    for(.time in 1:.time_units) {
-        newly_infected_simualtions <- map_dbl(1:.num_simulations_per_time,
-                                              ~ sum(simulate_infected_t_next(.susceptible_t[.time],
-                                                                             .infected_t[.time],
-                                                                             .infection_probability)))
-
-        sim_conf_intervals <- quantile(newly_infected_simualtions, c(0.025, 0.5, 0.975))
-        confidence_intervals <- confidence_intervals %>%
-            bind_rows(data.frame(t=.time,
-                                 x=sim_conf_intervals[2],
-                                 conf_low = sim_conf_intervals[1],
-                                 conf_high = sim_conf_intervals[3]))
-        #hist(newly_infected_simualtions)
-        .infected_t <- c(.infected_t, sim_conf_intervals[2])
-        .susceptible_t <- c(.susceptible_t, .susceptible_t[.time] - .infected_t[.time + 1])
-    }
-    
-    return (confidence_intervals)
-}
-
 ```
 
 ```{r}
 simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
-simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
 ```
 
-
-```{r}
+```{r fig.height=6, fig.width=9}
 num_time_units <- 100
-many_sims <- map(1:1000, ~ simulate_t_units(num_time_units, 400, 3, 0.004)$infected)
+many_sims <- map(1:10000, ~ simulate_t_units(num_time_units, 400, 3, 0.004)$infected)
 
-many_sims[[6]]
-sims_matrix <- matrix(unlist(many_sims), ncol = num_time_units + 1)
-dim(sims_matrix)
-View(sims_matrix)
+#many_sims[[1]]
+sims_matrix <- matrix(unlist(many_sims), ncol = num_time_units + 1, byrow = TRUE)
+#dim(sims_matrix)
+#View(sims_matrix)
 sims_df <- as.data.frame(sims_matrix)
-apply(sims_matrix, 2, median)
 quantile_low <- function(x) {
     quantile(x, 0.025)
 }
 quantile_high <- function(x) {
     quantile(x, 0.975)
 }
+
 data.frame(t=0:num_time_units,
-           x=apply(sims_matrix, 2, median),
+           mean_val=apply(sims_matrix, 2, mean),
+           median_val=apply(sims_matrix, 2, median),
            conf_low=apply(sims_matrix, 2, quantile_low),
            conf_high=apply(sims_matrix, 2, quantile_high)) %>%
-    ggplot(aes(x=t, y=x)) +
+    ggplot(aes(x=t, y=median_val)) +
     geom_point() +
-    geom_errorbar(aes(ymin=conf_low, ymax=conf_high))
+    geom_point(aes(y=mean_val), color='blue') +
+    geom_errorbar(aes(ymin=conf_low, ymax=conf_high)) +
+    scale_y_continuous(breaks = pretty_breaks(10)) +
+    coord_cartesian(xlim=c(0, 25), ylim=c(0, 70))
 
-
-library(stringr)
-library(tidyr)
-sims_df %>%
+sims_long_df <- sims_df %>%
+    mutate(sim=1:nrow(sims_df)) %>%
     pivot_longer(-sim, names_to = 'time_index', values_to = 'infected') %>%
-    mutate(time_index = as.numeric(str_remove(time_index, 'V'))) %>%
+    mutate(time_index = as.numeric(str_remove(time_index, 'V')))
+
+sims_long_df %>%
     ggplot(aes(x = time_index, y = infected, group=sim)) +
-    geom_line(alpha=0.2)
-simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
-simulate_t_units(20, 400, 3, 0.004)$infected %>% plot(type='b')
+    geom_line(alpha=0.01) +
+    scale_y_continuous(breaks = pretty_breaks(10)) +
+    coord_cartesian(xlim=c(0, 25), ylim=c(0, 70))
+
+sims_long_df %>%
+    ggplot(aes(x = time_index, y = infected)) +
+    geom_jitter(alpha=0.01) +
+    scale_y_continuous(breaks = pretty_breaks(10)) +
+    coord_cartesian(xlim=c(0, 25), ylim=c(0, 70))
+
+sims_long_df %>%
+    ggplot(aes(x = time_index, y = infected, group=time_index)) +
+    geom_boxplot() +
+    scale_y_continuous(breaks = pretty_breaks(10)) +
+    coord_cartesian(xlim=c(0, 25), ylim=c(0, 70))
 ```
-
-```{r}
-mc_sims <- simulate_mc_t_units()
-
-mc_sims %>%
-    ggplot(aes(x=t, y=x)) +
-    geom_point() +
-    geom_errorbar(aes(ymin=conf_low, ymax=conf_high))
-```
-
-
-```{r}
-newly_infected_simualtions
-```
-
-
-
-```{r}
-# MLE for Binomial Distribution 
-y<-c(0,0,0,1,1,1,1,1,1,1)
-y <- newly_infected_simualtions
-hist(y)
-#n <- 1 # length(y) here's the change!
-n <- .susceptible_t[.time]
-# formulation for the log likelihood for the binomial 
-logL <- function(p) sum(log(dbinom(y, n, p)))
-# again we can test the function for one value of p
-logL(0.7)
-#plot logL
-p.seq <- seq(0, 0.99, 0.01)
-plot(p.seq, sapply(p.seq, logL), type="l")
-#optimum:
-optimize_results <- optimize(logL, lower=0, upper=1, maximum=TRUE) 
-
-rt_plot_binom(400, optimize_results$maximum) + coord_cartesian(xlim = c(0, 10))
-
-```
-
-
-
-
-
 
 
 

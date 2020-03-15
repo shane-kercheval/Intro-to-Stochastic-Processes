@@ -186,17 +186,23 @@ simulate_infected_t_next <- function(.susceptible_t,
 simulate_infected_t_next(400, 3, 0.004)
 
 simulate_t_units <- function(.time_units=20,
-                             .susceptible_t=400,
-                             .infected_t=3,
+                             .susceptible_init=400,
+                             .infected_init=3,
                              .infection_probability=0.004) {
+
+    .susceptible_t <- numeric(.time_units + 1)
+    .infected_t <- numeric(.time_units + 1)
+    
+    .susceptible_t[1] <- .susceptible_init
+    .infected_t[1] <- .infected_init
 
     for(.time in 1:.time_units) {
         newly_infected <- simulate_infected_t_next(.susceptible_t[.time],
                                                    .infected_t[.time],
                                                    .infection_probability)
 
-        .infected_t <- c(.infected_t, sum(newly_infected))
-        .susceptible_t <- c(.susceptible_t, .susceptible_t[.time] - .infected_t[.time + 1])
+        .infected_t[.time + 1] <- sum(newly_infected)
+        .susceptible_t[.time + 1] <- .susceptible_t[.time] - .infected_t[.time + 1]
     }
     
     return (list(infected=.infected_t,
@@ -260,17 +266,129 @@ sims_long_df %>%
     coord_cartesian(xlim=c(0, 25), ylim=c(0, 70))
 ```
 
+## Example 1.12
 
+```{r fig.height=9, fig.width=12}
+number_of_simulations <- 10000
+X <- round(runif(number_of_simulations, min=0.50001, max=100.499999))
+plot(table(X) / number_of_simulations)
+Y <- map_dbl(X, ~ round(runif(1, min=0.50001, max= . + 0.499999)))
+# Distribution of Y
+plot(table(Y) / number_of_simulations)
 
+data.frame(x=X, y=Y) %>%
+    ggplot(aes(x=x, y=y)) +
+    geom_jitter(alpha=0.5)
 
+data.frame(x=X, y=Y) %>%
+    ggplot(aes(x=x, y=y, group=x)) +
+    geom_boxplot()
+#sum(table(Y) / number_of_simulations)
 
+# distribution of Y given X?
+plot(1:100, 1 / (1:100), type = 'h')
+```
 
+Same thing implemented differently
 
+```{r fig.height=9, fig.width=12}
+number_of_simulations <- 10000
+X <- sample(1:100, size = number_of_simulations, replace = TRUE)
+plot(table(X) / number_of_simulations)
+Y <- map_dbl(X, ~ sample(1:., size = 1, replace = TRUE))
+# Distribution of Y
+plot(table(Y) / number_of_simulations)
 
+data.frame(x=X, y=Y) %>%
+    ggplot(aes(x=x, y=y)) +
+    geom_jitter(alpha=0.5)
 
+data.frame(x=X, y=Y) %>%
+    ggplot(aes(x=x, y=y, group=x)) +
+    geom_boxplot()
+#sum(table(Y) / number_of_simulations)
 
+# distribution of Y given X?
+plot(1:100, 1 / (1:100), type = 'h')
+```
 
+## Example 1.21
 
+```{r}
+(flips <- rbinom(100, 1, 0.5))
+(rolling_sum <- rollapplyr(flips, width = 2, FUN = sum, partial = TRUE))
+which(rolling_sum == 2)
+```
+
+```{r}
+num_simulations <- 10000
+num_flips_until_2_heads <- map_dbl(1:num_simulations, ~ which(rollapplyr(rbinom(100, 1, 0.5), width = 2, FUN = sum, partial = TRUE) == 2)[1])
+mean(num_flips_until_2_heads)
+hist(num_flips_until_2_heads, breaks = max(num_flips_until_2_heads))
+```
+
+Note that expecte value is `6` (i.e the average of all the simulations i.e. in the long run.), even though `2` is the most probabilistic. 
+
+## Example 1.31
+
+```{r fig.height=9, fig.width=12}
+number_of_simulations <- 100000
+X <- runif(number_of_simulations, min=0, max=1)
+Y <- map_dbl(X, ~ runif(1, min=0, max= .))
+# Distribution of Y
+
+data.frame(x=X, y=Y) %>%
+    ggplot(aes(x=x, y=y)) +
+    geom_jitter(alpha=0.5)
+
+mean(Y)
+var(Y)
+```
+
+From Book
+
+```{r}
+trials <- 100000
+simlist <- replicate(trials, runif(1, 0, runif(1)))
+var(simlist)
+```
+
+## Exercise 1.35
+
+```{r}
+# gamble(k, n, p)
+  #   k: Gambler's initial state
+  #   n: Gambler plays until either $n or Ruin
+  #   p: Probability of winning $1 at each play
+  #   Function returns 1 if gambler is eventually ruined
+  #                    returns 0 if gambler eventually wins $n
+  
+gamble <- function(k,n,p) {
+	stake <- k
+	while (stake > 0 & stake < n) {
+		bet <- sample(c(-1,1), 1, prob=c(1-p, p))
+		stake <- stake + bet
+	}
+	if (stake == 0) return(1) else return(0)
+}   
+
+k <- 60
+n <-  100  
+p <- 0.50 
+trials <- 10000
+simlist <- replicate(trials, gamble(k, n, p))
+
+mean(simlist) # Estimate of probability that gambler is ruined
+1 - mean(simlist)# Estimate of probability that the gambler wins $100
+
+p <- 0.51
+trials <- 10000
+simlist <- replicate(trials, gamble(k, n, p))
+
+mean(simlist) # Estimate of probability that gambler is ruined
+1 - mean(simlist)# Estimate of probability that the gambler wins $100
+
+```
 
 
 

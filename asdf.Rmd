@@ -17,9 +17,19 @@ library(stringr)
 library(dplyr)
 library(tidyr)
 library(rtools)
+
 options(scipen=999) # non-scientific notation
 theme_set(theme_light())
 ```
+
+```{r}
+matrixpower <- function(mat,k) {
+    if (k == 0) return (diag(dim(mat)[1])) 
+    if (k == 1) return(mat)
+    if (k > 1) return( mat %*% matrixpower(mat, k-1))
+}
+```
+
 
 # Appendix B - Probability Review
 
@@ -390,9 +400,98 @@ mean(simlist) # Estimate of probability that gambler is ruined
 
 ```
 
+# Chapter 2
+
+## Example 2.16
+
+```{r}
+trans_matrix <- function(.names, .values) {
+    P <- matrix(ncol = length(.names), 
+            byrow = TRUE, dimnames = list(.names, .names),
+            data=.values)
+    
+    stopifnot(all.equal(as.numeric(rowSums(P)), rep(1, length(.names))))
+    return (P)
+}
+P <- trans_matrix(c("B", "F", "P", "S"),
+                  c(0.0, 0.5, 0.5, 0.0,
+                    0.5, 0.0, 0.5, 0.0,
+                    0.4, 0.0, 0.0, 0.6,
+                    0.0, 0.2, 0.6, 0.2))
+P
+(P_2 <- matrixpower(P, 2))
+(P_3 <- matrixpower(P, 3))
+
+(alpha <- rep(0.25, 4))
+
+(alpha %*% P_3)[1, 'S']
+P_2['S', 'S']
+P['S', 'P']
+
+(alpha %*% P_3)[1, 'S'] * P_2['S', 'S'] * P['S', 'P']
+```
 
 
 
+```{r}
+P_2['P', 'F']
+```
+
+
+
+```{r}
+# https://stackoverflow.com/questions/18824596/how-to-create-a-transition-matrix-in-r
+
+# assuming the data is read into a data frame called "raindata"
+raindata <- tribble(
+    ~day,~month,~year,~rainfall,
+    1,01,1950,0.586212158,
+    2,01,1950,1.202758789,
+    3,01,1950,0,
+    4,01,1950,0,
+    5,01,1950,0,
+    6,01,1950,0.183441162,
+    7,01,1950,4.675704956,
+    8,01,1950,9.258003235,
+    9,01,1950,3.425468445,
+    10,01,1950,0,
+    11,01,1950,0,
+    12,01,1950,8.39233E-05,
+    13,01,1950,0,
+    14,01,1950,0,
+    15,01,1950,0.641731262,
+    16,01,1950,9.325141907,
+    17,01,1950,5.588417053,
+    18,01,1950,0.903343201,
+    19,01,1950,3.892127991,
+    20,01,1950,0.133895874,
+    21,01,1950,0.102630615,
+    22,01,1950,5.334564209,
+    23,01,1950,1.017593384,
+    24,01,1950,0,
+    25,01,1950,0.621734619,
+    26,01,1950,0.957794189,
+    27,01,1950,3.131622314,
+    28,01,1950,4.868865967,
+    29,01,1950,0.169281006,
+    30,01,1950,0,
+    31,01,1950,0)
+
+rf <- raindata$rainfall
+n <- length(rf)
+rainedf <- as.factor(ifelse(rf,0,1))
+trf_df <- data.frame(yesterday=rainedf[1:(n-1)],today=rainedf[2:n])
+trf_freq <- table(trf_df)
+trf_prob <- trf_freq/rowSums(trf_freq)
+
+rowSums(trf_prob)
+
+# probability it will not rain today given it rained yesterday
+# row 2 column 1
+trf_prob[2, 1]
+# same thing
+sum(trf_df$today == 0 & trf_df$yesterday == 1) / sum(trf_df$yesterday == 1)
+```
 
 
 

@@ -1069,7 +1069,9 @@ rownames(P) <- as.character(0:100)
 preview_matrix <- function(M) {
     num_rows <- nrow(M)
     num_cols <- ncol(M)
-    M[c(1:5, max((num_rows-5), 1):num_rows), c(1:5, max((num_cols-5), 1):num_cols)]
+    row_indices <- unique(c(1:min(5, num_rows), max((num_rows-5), 1):num_rows))
+    col_indices <- unique(c(1:min(5, num_cols), max((num_cols-5), 1):num_cols))
+    return (M[row_indices, col_indices])
 }
 ```
 
@@ -1113,6 +1115,8 @@ I_m <- P[absorbing_states, absorbing_states]
 I_m
 ```
 
+P.g 125.. The `fundamental matrix` gives the expected number of visits to `j` given tha the chain starts in `i`.
+
 ```{r}
 # solve returns inverse of matrix if `b` is not passed
 fundamental_matrix <- solve(diag(length(transient_states)) - Q)  # change M to P... because M doesn't exist
@@ -1122,21 +1126,114 @@ preview_matrix(fundamental_matrix)
 
 
 ```{r}
-(f %*% rep(1,100))[1:5,]
+(fundamental_matrix %*% rep(1,100))[1:5,]
+```
+
+pg. 126 .... That is, the expected absorption times are the row sums of the fundamental matrix.
+
+i.e. values below have same values as above. From starting point (index `0`), it takes, on average, `39.60` moves to treach the ending square (i.e. to get absorbed).
+
+```{r}
+rowSums(fundamental_matrix)
+```
+
+
+```{r}
+# pg 123 "If the Markov chain has only one absorbing state, this submatrix will be a (k-1)-element
+# column of vectors of 1s
+(fundamental_matrix %*% R)[c(1:5, 95:100),]
+```
+
+
+```{r}
+Q_absorb <- function(P, transient_states) {
+    P[transient_states, transient_states]
+}
+
+R_absorb <- function(P, transient_states, absorbing_states) {
+    P[transient_states, absorbing_states]
+}
+fundamental_matrix <- function(P, transient_states) {
+    Q <- Q_absorb(P, transient_states)
+    return (solve(diag(length(transient_states)) - Q))
+}
+```
+
+
+```{r}
+P <- trans_matrix(paste0("$", c(1:4, 0, 5)),
+                  c(0.0, 0.6, 0.0, 0.0, 0.4, 0.0,
+                    0.4, 0.0, 0.6, 0.0, 0.0, 0.0,
+                    0.0, 0.4, 0.0, 0.6, 0.0, 0.0,
+                    0.0, 0.0, 0.4, 0.0, 0.0, 0.6,
+                    0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 1.0))
+P
+transient_states <- 1:4
+absorbing_states <- 5:6
+
+Q <- Q_absorb(P, transient_states)
+Q
+
+R <- R_absorb(P, transient_states, absorbing_states)
+R
+
+(fund_matrix <- fundamental_matrix(P, transient_states))
+
+fund_matrix %*% R
 ```
 
 ```{r}
-# not sure what this is just playing around
-(f %*% R)[1:5,]
+rowSums(fund_matrix)
 ```
 
 
-
- 
-
+```{r}
+# If the gambler starts with $2, the probability of their eventual ruin is 0.36 (pg 124)
+(fund_matrix %*% R)[2, ]
 ```
 
 
+```{r}
+# graduation.R
+# Simulating graduation, drop-out rate
+init <- c(0,1,0,0,0,0) # student starts as freshman
+
+state_names <-  c("Dropout","Fr","So","Jr","Se","Graduate")
+P <- trans_matrix(state_names,
+                  c(1, 0, 0, 0, 0, 0,0.06,0.03,0.91,0,0,0,0.06,0,0.03,0.91,0,0,0.04,0,0,0.03,0.93,0,0.04,0,0,0,0.03,0.93,0,0,0,0,0,1))
+P <- cbind(P[,2:5], P[,1], P[,6])
+P <- rbind(P[2:5,], P[1,], P[6,])
+state_names <-  c("Fr","So","Jr","Se", "Dropout", "Graduate")
+colnames(P) <- state_names
+rownames(P) <- state_names
+P
+```
+
+```{r}
+matrixpower(P, 1000)[, c('Dropout', 'Graduate')]
+```
+
+```{r}
+transient_states <- 1:4
+absorbing_states <- 5:6
+
+Q <- Q_absorb(P, transient_states)
+Q
+
+R <- R_absorb(P, transient_states, absorbing_states)
+R
+
+(fund_matrix <- fundamental_matrix(P, transient_states))
+
+fund_matrix %*% R
+matrixpower(P, 1000)[c('Fr', 'So', 'Jr', 'Se'), c('Dropout', 'Graduate')]
+```
+
+```{r}
+# expected number of steps until absorbed (in this case either dropout or grad)
+rowSums(fund_matrix)
+```
 
 
 

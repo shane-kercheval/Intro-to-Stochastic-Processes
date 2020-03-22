@@ -107,14 +107,24 @@ for (i in 1:6) {
  r(99,c(100,99,99,99,99,99))
  r(100,c(100,100,100,100,100,100))
 
+rowSums(P)
+#P %>% View()
+# P has 101 rows/columns
+# the first column/row represents the 0th move, so init is 1 meaning they start on block 1 according to Figure 3.13
 init <- c(1,rep(0,100))
 ## simulate the game 
 markov(init,P,50,0:100)
 
+P %>% View()
+
+matrixpower(P, 1000) %>%  View()
+M
+
 simlist <- replicate(1000,which(markov(init,P,500,0:100) == 100)[1])
- mean(simlist)
+mean(simlist)
 # fundamental matrix
-f <- solve(diag(100) - M[1:100,1:100])
+# only getting 1:100 so excluding the 0th move.
+f <- solve(diag(100) - P[1:100,1:100])  # change M to P... because M doesn't exist
 ## absorbtion probabilities
 f %*% rep(1,100)
 

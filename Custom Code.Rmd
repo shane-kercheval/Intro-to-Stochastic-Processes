@@ -149,7 +149,7 @@ blood_type_probabilities <- c(0.44, 0.42, 0.10, 0.04)
 names(blood_type_probabilities) <- c("O", "A", "B", "AB")
 blood_type_probabilities
 
-snumber_of_people <- 6
+number_of_people <- 6
 # random selection of people
 rmultinom(10, size = number_of_people, prob = blood_type_probabilities)
 # probability (density) that, in a sample of 6 people, 

@@ -138,9 +138,14 @@ rt_plot_poisson <- function(.num_observations, .rate) {
     scale_x_continuous(breaks = pretty_breaks(max(.num_observations) + 1)) +
     scale_y_continuous(labels=percent_format())
 }
-rt_plot_poisson(0:30, 21.7) 
+rt_plot_poisson(0:35, 21.7) +
+    geom_vline(xintercept = 14, color='red') +
+    geom_text(aes(x=14, y = dpois(14, 21.7),
+                  label=paste("p<=14:", round(ppois(14, 21.7), 3)), color='red'),
+              vjust=-0.2, hjust=1)
 dpois(14, 21.7)
 ppois(14, 21.7)
+sum(dpois(0:14, 21.7))
 ```
 
 ## Example B.9
@@ -1251,16 +1256,267 @@ matrixpower(P, 1000)[c('Fr', 'So', 'Jr', 'Se'), c('Dropout', 'Graduate')]
 rowSums(fund_matrix)
 ```
 
+# Chapter 4 - Brnching Processes
+
+```{r}
+branch_pois <- function(n,lam) {
+    z <- c(1, rep(0, n))
+    for (i in 2:(n+1)) {
+        z[i] <- sum(rpois(z[i-1], lam))
+    }
+    return(z)
+}
+			
+### Geometric offspring
+branch_geom <- function(n, p) {
+    z <- c(1, rep(0, n))
+    for (i in 2:(n+1)) {
+        z[i] <- sum(rgeom(z[i-1], p))
+    }
+    return(z)
+}
+			
+curve((1-sqrt(1-4*x*(1-x)))/(2*(1-x)),0,1/2,xlab="p",ylab="Extinction probability")
+```
+
+```{r}
+branch_pois(n=10, lam=0.75)
+branch_pois(n=10, lam=1)
+branch_pois(n=10, lam=1.5)
+```
+
+```{r}
+branch_geom(n=10, p = 0.25)
+branch_geom(n=10, p = 0.5)
+branch_geom(n=10, p = 0.75)
+branch_geom(n=10, p = 1)
+```
 
 
+```{r}
+### Examples						
+branch_geom(10, 1/4)
+replicate(5, branch_geom(10, 1/4))		
+n <- 5000
+simlist <- replicate(n, branch_geom(10,1/4)[11])
+sum(simlist==0)/n
+
+branch_geom(10,1/4)	
+curve((1-sqrt(1-4*x*(1-x)))/(2*(1-x)),0,1/2,xlab="p",ylab="Extinction probability")
+		
+## Example in class a= (1/6,1/3,1/2)		
+branch <- function(n) {
+    z <- c(1,rep(0,n))
+    for (i in 2:(n+1)) {
+        z[i] <- sum( sample(0:2, z[i-1], replace=T, prob=c(1/6, 1/3, 1/2)))
+    }
+    return(z)
+}
+
+branch(20)
+n <- 5000
+simlist <- replicate(n, branch(20)[21])
+sum(simlist==0)/n
+```
+
+# Chapter 5 - Markov Chain Monte Carlo
+
+```{r}
+# adjacent.R
+# Section 5.1
+# generate a random 0-1 sequence with no adjacent 1's
+# count the number of 1's and take the average
+# init:   initial sequence
+# n:       number of steps to run the chain
+
+adjacent <- function(init, n) {
+
+    k <- length(init)
+    tot <- 0  # total number of 1's
+    new <- c(2, init, 2)  # pad sequence at the ends
+
+    for (i in 1:n) {
+
+        index <- 1 + sample(1:k, 1)
+        newbit <- !new[index]   # flip the bit
+        if (newbit == 0) {
+
+            new[index] <- 0
+            tot <- tot + sum(new)
+            #next
+
+        } else {
+            if (new[index-1] == 1 || new[index+1] == 1) {
+                
+                tot <- tot + sum(new)
+                next
+
+            } else {
+
+                new[index] <- 1
+            } 
+            tot <- tot + sum(new)
+        }
+    }
+    # subtract both endpoints
+    return (tot/n - 4)
+}
+m <- 100
+init <- rep(0, m)  # Start at sequence of all 0's
+adjacent(init, 100000)
+ 
+```
+
+```{r}
+adjacent2 <- function(init, n) {
+
+    k <- length(init)
+    tot <- 0  # total number of 1's
+    new <- c(2, init, 2)  # pad sequence at the ends
+
+    for (i in 1:n) {
+
+        index <- 1 + sample(1:k, 1)  # random index between padding values
+        # construct the new good sequence
+        newbit <- !new[index]   # flip the bit
+        # we can only make the change to the sequence if the resulting sequence is "good" (i.e. no adjacent 1's) (pg 185)
+        if (newbit == 0) {  # if the bit is zero, we know making this change will result in a "good" sequence
+
+            new[index] <- 0
+
+        } else if(new[index-1] != 1 && new[index+1] != 1) {  # if the bit is 1 we can only make the change (i.e. create a "good" sequence)
+                                                             # if neither the previous/next values are equal to 1 i.e. they are both zero (or 2 for padding)
+            new[index] <- 1
+        }
+        # add to the previous total the new number of 1's
+        tot <- tot + sum(new)
+    }
+    # subtract both endpoints
+    return (tot/n - 4)
+}
+m <- 100
+init <- rep(0, m)  # Start at sequence of all 0's
+adjacent2(init, 100000)
+```
+
+```{r}
+# coded similar to the MH algo (but not the same thing)
+acceptance_function <- function(proposal_state, index, chain) {
+     # we can only make the change to the sequence if the resulting sequence is "good" (i.e. no adjacent 1's) (pg 185)
+        if (proposal_state == 0) {  # if the bit is zero, we know making this change will result in a "good" sequence
+
+            return (TRUE)
+
+        } else if(chain[index-1] != 1 && chain[index+1] != 1) {  # if the bit is 1 we can only make the change (i.e. create a "good" sequence)
+                                                             # if neither the previous/next values are equal to 1 i.e. they are both zero (or 2 for padding)
+            return (TRUE)
+        } else {
+            
+            return (FALSE)
+        }
+}
+adjacent3 <- function(init, n) {
+
+    k <- length(init)
+    tot <- 0  # total number of 1's
+    chain <- c(2, init, 2)  # pad sequence at the ends
+
+    for (i in 1:n) {
+
+        index <- 1 + sample(1:k, 1)  # random index between padding values
+        proposal_state <- !chain[index]   # flip the bit
+        # construct the new good sequence
+        if(acceptance_function(proposal_state, index, chain)){
+
+            chain[index] <- proposal_state
+        }
+        # add to the previous total the new number of 1's
+        tot <- tot + sum(chain)
+    }
+    # subtract both endpoints
+    return (tot/n - 4)
+}
+m <- 100
+init <- rep(0, m)  # Start at sequence of all 0's
+adjacent3(init, 100000)
+```
+
+# Chapter 6 - Poisson Process
+
+```{r}
+num_observations <- 100
+rate <- 30
+density_pois <- dpois(0:num_observations, rate)
+
+sum(0:num_observations * density_pois)
+```
+
+```{r}
+rt_plot_poisson <- function(.num_observations, .rate) {
+    data.frame(x = .num_observations,
+               y = dpois(.num_observations, .rate)) %>%
+        ggplot(aes(x=x, y=y)) +
+    geom_col() +
+    scale_x_continuous(breaks = pretty_breaks(min(30, max(.num_observations) + 1))) +
+    scale_y_continuous(labels=percent_format())
+}
+```
+
+```{r}
+rt_plot_poisson(0:10, 2)
+rt_plot_poisson(0:60, 30)
+```
 
 
+```{r}
+rt_plot_poisson(0:35, 21.7) +
+    geom_vline(xintercept = 14, color='red') +
+    geom_text(aes(x=14, y = dpois(14, 21.7),
+                  label=paste("p<=14:", round(ppois(14, 21.7), 3))),
+              color='red',
+              vjust=-0.2, hjust=1)
+dpois(14, 21.7)
+ppois(14, 21.7)
+sum(dpois(0:14, 21.7))
+```
+
+## Example 6.1
+
+```{r}
+rt_plot_poisson(0:100, 2 * 30) +
+    geom_vline(xintercept = 65, color='red') +
+    geom_text(aes(x=65, y = dpois(65, 2 * 30),
+                  label=paste("p>65:", round(1 - ppois(65, 2 * 30), 7))),
+              color='red',
+              vjust=-0.2, hjust=-0.1)
+dpois(65, 2 * 30)
+ppois(65, 2 * 30)
+sum(dpois(0:100, 2*60))
+```
+
+```{r}
+rt_plot_exp <- function(.rate) {
+    x_axis <- 0:round(quantile(rexp(1000, rate=1/30), p=0.975))
+    data.frame(x = x_axis, y = dexp(x_axis, .rate)) %>%
+        ggplot(aes(x=x, y=y)) +
+    geom_col() +
+    geom_vline(xintercept = 1 / .rate, color='blue') +
+    scale_x_continuous(breaks = pretty_breaks(min(30, max(num_observations) + 1))) +
+    scale_y_continuous(labels=percent_format())
+}
+```
 
 
+```{r}
+rt_plot_exp(1/30)
+```
 
-
-
-
+```{r}
+# probability of <=30
+pexp(30, 1/30)
+# expected value i.e. on average
+sum(0:10000 * dexp(0:10000, 1/30))
+```
 
 
 
